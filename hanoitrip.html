@@ -24,6 +24,12 @@
     var blob = new Blob([JSON.stringify(json)], {type:'application/manifest+json'});
     link.setAttribute('href', URL.createObjectURL(blob));
   }catch(e){ console.warn('manifest fixup failed', e); }
+  // 구형 iOS Safari는 CSS의 (display-mode: standalone) 미디어 쿼리를 못 믿을 때가 있어서,
+  // navigator.standalone(iOS 전용 플래그)으로도 한 번 더 확인해서 클래스를 달아둬요.
+  try{
+    var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    if(isStandalone) document.documentElement.classList.add('pwa-standalone');
+  }catch(e){}
 })();
 </script>
 <meta name="theme-color" content="#1E3350">
@@ -143,6 +149,15 @@
     body{ padding:24px 12px; }
     .app{ height:min(920px, calc(100dvh - 48px)); border-radius:28px; }
   }
+  /* 홈 화면에 설치해서 진짜 "앱"으로 실행 중일 땐(브라우저 탭이 아니라), 화면 폭이 넓게
+     잡히는 기기라도 항상 화면 전체를 꽉 채워야 해요 — 위 카드 스타일(둥근 모서리+여백)은
+     브라우저에서 볼 때의 데스크톱 미리보기용이지, 설치된 앱에서는 나오면 안 돼요. */
+  @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui){
+    body{ padding:0 !important; }
+    .app{ max-width:none !important; width:100vw !important; height:100dvh !important; border-radius:0 !important; box-shadow:none !important; }
+  }
+  html.pwa-standalone body{ padding:0 !important; }
+  html.pwa-standalone .app{ max-width:none !important; width:100vw !important; height:100dvh !important; border-radius:0 !important; box-shadow:none !important; }
 
   .app-bg{ position:absolute; inset:0; z-index:0; overflow:hidden; }
   .app-bg svg{ position:absolute; bottom:0; left:0; width:100%; height:60%; display:block; }
@@ -1100,28 +1115,6 @@
     {id:"t2", name:"나인", mode:"리무진버스 6021", from:"홍대입구", depart:"08:40", arrive:"10:10", flight:"VN0602 13:20", phone:"", lastPing:null},
     {id:"t3", name:"률희", mode:"KTX+공항버스", from:"광주송정역", depart:"06:40", arrive:"10:20", flight:"VN0602 13:20", phone:"", lastPing:null}
   ];
-  var DEFAULT_CART = [
-    {name:"녹두과자 (Bánh Đậu Xanh)", for:"부모님", checked:false},
-    {name:"기념품 마그넷", for:"본인", checked:false},
-    {name:"콩카페 원두", for:"회사 동료", checked:false},
-    {name:"전통 자수 파우치", for:"률희", checked:false}
-  ];
-  var DEFAULT_PREP = [
-    {text:"여권 유효기간 확인", checked:false},
-    {text:"유심/이심 로밍 준비", checked:false},
-    {text:"보조배터리 · 충전기", checked:false},
-    {text:"우산 · 우비", checked:false},
-    {text:"상비약 챙기기", checked:false},
-    {text:"편한 신발", checked:false},
-    {text:"현금 환전 · 카드 한도 확인", checked:false}
-  ];
-  var DEFAULT_BUCKET = [
-    {text:"문묘에서 인생샷 찍기", checked:false},
-    {text:"콩카페 코코넛 커피 마시기", checked:false},
-    {text:"야시장에서 반미 먹기", checked:false},
-    {text:"기찻길 마을 가보기", checked:false},
-    {text:"셋이 아오자이 대여 촬영", checked:false}
-  ];
 
   function pad(n){ return n<10 ? "0"+n : ""+n; }
   function fmtInt(n){ n = Math.round(Number(n)||0); return n.toLocaleString("ko-KR"); }
@@ -2056,24 +2049,10 @@
     metaDoc.get().then(function(d){ if(!d) metaDoc.set(state.meta); });
     var emDoc = Store.doc("emergency/status");
     emDoc.get().then(function(d){ if(!d) emDoc.set({active:false}); });
-    // prep/bucket/shopping은 collection.add()(호출마다 새 임의 id)가 아니라 고정 id로 심어요 —
-    // 세 명이 앱을 거의 동시에 처음 열어서 이 코드가 동시에 실행돼도, 같은 id를 덮어쓸 뿐
-    // 중복 행이 쌓이지 않아요.
-    seedFixedList_("shopping", DEFAULT_CART, "c");
-    seedFixedList_("prep", DEFAULT_PREP, "p");
-    seedFixedList_("bucket", DEFAULT_BUCKET, "k");
-    DEFAULT_TRAVELERS.forEach(function(t){
-      var wDoc = Store.doc("wallets/"+t.id);
-      wDoc.get().then(function(d){ if(!d) wDoc.set({items: DEFAULT_WALLETS[t.id]||[]}); });
-    });
-  }
-  function seedFixedList_(collection, defaults, prefix){
-    var col = Store.collection(collection);
-    col.onSnapshot(function(list){
-      if(list.length===0){
-        defaults.forEach(function(item, i){ Store.doc(collection+"/"+prefix+i).set(item); });
-      }
-    })();
+    // 체크리스트(준비물/하고 싶은 것/기념품)나 지갑(내가 가져온 돈)은 예시 데이터를 심지 않고
+    // 완전히 빈 상태로 시작해요 — 각자 직접 채워 넣도록. (예전엔 예시 항목을 자동으로 채워뒀는데,
+    // 그 항목들을 전부 지워도 컬렉션이 "비어있다"는 걸 감지할 때마다 자동으로 도로 채워 넣는 코드가
+    // 있어서 "아무리 지워도 다시 생긴다"는 문제가 있었어요. 아예 심지 않는 걸로 없앴어요.)
   }
 
   // "내가 가져온 돈"은 로그인한 본인 지갑 문서만 state.myWallet에 담아서 화면에 그려요.
@@ -2084,7 +2063,7 @@
     if(unsubMyWallet){ unsubMyWallet(); unsubMyWallet = null; }
     if(!myId){ state.myWallet = []; renderMoney(); return; }
     unsubMyWallet = Store.doc("wallets/"+myId).onSnapshot(function(d){
-      state.myWallet = (d && d.items) || DEFAULT_WALLETS[myId] || [];
+      state.myWallet = (d && d.items) || [];
       renderMoney();
     });
   }
@@ -2252,12 +2231,28 @@
     });
     if(!which){ panel.innerHTML = ""; return; }
     if(which==="weather"){
-      fetchLiveWeather(cityChoice);
-      var guess = getWeatherGuess();
-      var live = LIVE_WEATHER_CACHE[cityChoice];
+      // 예전엔 무조건 "지금 이 순간" 날씨(currentConditions)만 보여줘서, 위 홈 화면 날짜 스트립에서
+      // 다른 날짜를 눌러도 날씨는 안 바뀌고 계속 "지금" 기준으로 보였어요. 이제는 그 날짜 스트립에서
+      // 고른 날짜(focusedDateKey)의 예보를 기준으로 보여주고, 배지에도 "몇 월 며칠 예보/추정치"인지
+      // 항상 명시해요 — 오늘 날짜일 때만 실시간 현재 기온도 같이 참고해요.
+      var dateStr = focusedDateKey;
+      fetchDayForecast(cityChoice);
+      var fc = dayForecastFor(cityChoice, dateStr);
+      var isToday = dateStr === dateKey(new Date());
+      if(isToday) fetchLiveWeather(cityChoice);
+      var live = isToday ? LIVE_WEATHER_CACHE[cityChoice] : null;
       var isLive = !!(live && live.fetchedAt);
+      var guess = fc && fc.precipPct!=null ? (fc.precipPct>=40?"B":"A") : getWeatherGuess();
       var staticW = CITY_WEATHER[cityChoice][guess];
-      var w = isLive ? Object.assign({}, staticW, live, {hourly:(live.hourly&&live.hourly.length)?live.hourly:staticW.hourly}) : staticW;
+      var w = Object.assign({}, staticW,
+        fc ? {icon:fc.icon||staticW.icon, cond:fc.cond||staticW.cond, temp: fc.maxTemp!=null ? fc.maxTemp : staticW.temp} : {},
+        isLive ? {icon:live.icon, temp:live.temp, cond:live.cond, advisory:live.advisory, hourly:(live.hourly&&live.hourly.length)?live.hourly:staticW.hourly} : {}
+      );
+      var dparts = dateStr.split("-");
+      var dlabel = dparts.length===3 ? (Number(dparts[1])+"/"+Number(dparts[2])) : dateStr;
+      var basisLabel = fc
+        ? dlabel+(fc.minTemp!=null&&fc.maxTemp!=null?" "+fc.minTemp+"~"+fc.maxTemp+"°":"")+" 예보"+(isLive?" · 지금 "+live.temp+"°":"")
+        : dlabel+" 추정치"+(isToday?"":" · 예보 범위 밖");
       panel.innerHTML =
         '<div class="pilltabs" id="qpCityTabs" style="margin-bottom:10px;">'+
           '<button data-city="seoul" class="'+(cityChoice==="seoul"?"on":"")+'">🇰🇷 서울</button>'+
@@ -2267,7 +2262,7 @@
           '<div class="wx-top">'+
             '<span class="wx-icon">'+w.icon+'</span>'+
             '<div><div class="wx-temp">'+w.temp+'°</div><div class="wx-cond">'+w.cond+'</div></div>'+
-            '<span class="wx-badge">'+(isLive?"실시간":"추정치")+'</span>'+
+            '<span class="wx-badge">'+basisLabel+'</span>'+
           '</div>'+
           '<div class="wx-banner'+(guess==="B" && !isLive?" rain":"")+'">'+w.advisory+'</div>'+
           '<div class="wx-hourly">'+w.hourly.map(function(h){
@@ -2477,6 +2472,7 @@
     focusedDateKey = key;
     renderDateStrip();
     renderDateHighlight();
+    if(qpOpen==="weather") renderQpPanel("weather");
   }
 
   function renderDateHighlight(){
@@ -2514,26 +2510,33 @@
      "지금 날씨"가 아니라, 위 날짜 탭에서 고른 09/04·09/05 같은 그 날짜 자체의 예보예요.
      하노이 현지 날짜 기준으로 맞춰요(한국이랑 시차 있는 것 감안). SHEETS_URL이 없거나 그 날짜가
      예보 범위(보통 최대 10일) 밖이면, 조용히 기존 시간대 추정 방식으로 대체돼요. */
-  var DAY_FORECAST_CACHE = null; // {fetchedAt, byDate:{ "YYYY-MM-DD": {...} }}
-  function fetchDayForecast(){
+  // 서울/하노이 둘 다 "위에서 고른 날짜"의 예보를 볼 수 있어야 해서(일정 탭 + 홈 화면 빠른 확인 둘 다),
+  // 도시별로 따로 캐시해요.
+  var DAY_FORECAST_CACHE = { seoul:null, hanoi:null }; // {fetchedAt, byDate:{ "YYYY-MM-DD": {...} }}
+  function fetchDayForecast(city){
+    city = city || "hanoi";
     if(!SHEETS_URL) return;
-    if(DAY_FORECAST_CACHE && (Date.now()-DAY_FORECAST_CACHE.fetchedAt) < 3*3600000) return; // 3시간 캐시
-    var coord = CITY_COORDS.hanoi;
+    var cur = DAY_FORECAST_CACHE[city];
+    if(cur && (Date.now()-cur.fetchedAt) < 3*3600000) return; // 3시간 캐시
+    var coord = CITY_COORDS[city];
+    if(!coord) return;
     fetch(SHEETS_URL+"?action=forecastdays&lat="+coord.lat+"&lng="+coord.lng)
       .then(function(r){ return r.json(); })
       .then(function(d){
         if(!d || !d.ok || !d.days) return;
         var byDate = {};
         d.days.forEach(function(day){ if(day.date) byDate[day.date] = day; });
-        DAY_FORECAST_CACHE = { fetchedAt: Date.now(), byDate: byDate };
+        DAY_FORECAST_CACHE[city] = { fetchedAt: Date.now(), byDate: byDate };
         renderItemStatuses();
+        if(qpOpen==="weather" && cityChoice===city) renderQpPanel("weather");
       }).catch(function(){});
   }
-  function dayForecastFor(dateStr){
-    return (DAY_FORECAST_CACHE && DAY_FORECAST_CACHE.byDate[dateStr]) || null;
+  function dayForecastFor(city, dateStr){
+    var cur = DAY_FORECAST_CACHE[city];
+    return (cur && dateStr && cur.byDate[dateStr]) || null;
   }
   function getWeatherGuess(dateStr){
-    var fc = dateStr ? dayForecastFor(dateStr) : null;
+    var fc = dateStr ? dayForecastFor("hanoi", dateStr) : null;
     if(fc && fc.precipPct!=null) return fc.precipPct>=40 ? "B" : "A";
     var h = hanoiHour();
     return (h>=14 && h<19) ? "B" : "A";
@@ -2576,8 +2579,8 @@
   }
   function renderItemStatuses(){
     renderPlanMiniMap();
-    fetchDayForecast();
-    var fc = dayForecastFor(planSelectedDate);
+    fetchDayForecast("hanoi");
+    var fc = dayForecastFor("hanoi", planSelectedDate);
     var active = getWeatherGuess(planSelectedDate);
     var other = active==="A" ? "B" : "A";
     var head = document.getElementById("planLineActive");
@@ -2660,11 +2663,6 @@
 
   var CURRENCIES = ["KRW","USD","VND"];
   var CURRENCY_SYM = {KRW:"원", USD:"$", VND:"₫"};
-  var DEFAULT_WALLETS = {
-    t1: [{currency:"USD", amount:300}],
-    t2: [{currency:"VND", amount:3000000}],
-    t3: [{currency:"KRW", amount:500000}]
-  };
   function getMyWallet(){
     return myId ? (state.myWallet||[]) : [];
   }
