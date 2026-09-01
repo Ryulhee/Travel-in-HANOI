@@ -1925,6 +1925,10 @@
   };
   var myId = localStorage.getItem("hanoi_myid") || null;
   var unsubMyWallet = null;
+  // 시트/DB에서 실제 데이터를 받아올 때까지 기다리지 않고, 기본 이름(가현·나인·률희)으로
+  // 바로 그려서 첫 화면이 무조건 "누구세요?" 선택 화면부터 뜨도록 해요(느린 네트워크에서도
+  // 홈 화면이 잠깐 비치는 일이 없게).
+  renderEntryGate();
 
   /* ===================== BOOT APP ===================== */
   function startApp(pollOk){
