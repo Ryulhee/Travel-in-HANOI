@@ -99,7 +99,7 @@
   h1,h2,h3{ font-family:var(--font-display); font-weight:800; margin:0; text-wrap:balance; letter-spacing:-.01em; }
   p{ margin:0; }
   button{ font-family:inherit; }
-  input,select,textarea{ font-family:inherit; }
+  input,select,textarea{ font-family:inherit; min-width:0; max-width:100%; }
   ::selection{ background:var(--accent-soft); }
   a{ color:inherit; }
   @media (prefers-reduced-motion: reduce){
@@ -315,7 +315,7 @@
   .qp-row .go{ flex:0 0 auto; font-size:11px; font-weight:700; color:var(--accent); text-decoration:none; }
   .qp-list{ display:flex; flex-direction:column; gap:7px; margin-top:8px; }
   .qp-money-form{ display:grid; grid-template-columns:1.2fr 0.8fr 0.7fr; gap:6px; margin-top:8px; }
-  .qp-money-form input, .qp-money-form select{ border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:8px 9px; font-size:12.5px; }
+  .qp-money-form input, .qp-money-form select{ min-width:0; width:100%; border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:8px 9px; font-size:12.5px; }
 
   /* ---------- weather widget (quick check) ---------- */
   .wx-card{ display:flex; flex-direction:column; gap:12px; }
@@ -428,11 +428,11 @@
     font-size:10.5px; font-weight:700; padding:3px 7px; border-radius:999px; background:var(--accent); color:var(--accent-ink);
   }
   .trav-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .field{ display:flex; flex-direction:column; gap:3px; }
+  .field{ display:flex; flex-direction:column; gap:3px; min-width:0; }
   .field label{ font-size:10px; color:var(--ink-faint); }
   .field select, .field input[type=time], .field input[type=text]{
     border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:7px 8px; font-size:12.5px; color:var(--ink);
-    width:100%;
+    width:100%; min-width:0; box-sizing:border-box;
   }
   .route-line{ font-size:11.5px; color:var(--ink-soft); display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
   .route-line b{ color:var(--ink); font-family:var(--font-mono); }
@@ -526,7 +526,7 @@
   .fx-details .editrow{ margin-top:8px; }
 
   .exp-form{ display:grid; grid-template-columns:1.4fr 1fr; gap:8px; }
-  .exp-form input, .exp-form select{ border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:9px 10px; font-size:13px; }
+  .exp-form input, .exp-form select{ min-width:0; width:100%; border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:9px 10px; font-size:13px; }
   .exp-list{ display:flex; flex-direction:column; }
   .exp-row{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
   .exp-row:last-child{ border-bottom:none; }
@@ -771,7 +771,7 @@
             <button data-date="2026-09-04" class="on">09/04 (금)</button>
             <button data-date="2026-09-05">09/05 (토)</button>
           </div>
-          <span class="hint">☀️/🌧️ 자동 추정</span>
+          <span class="hint">☀️/🌧️ 아래 참고</span>
         </div>
         <div class="editrow" style="margin-top:2px; margin-bottom:8px;">
           <label>기준 위치</label>
@@ -2407,7 +2407,31 @@
       {key:"B2", time:"저녁", emoji:"🎭", place:"수상인형극장"}
     ]
   };
-  function getWeatherGuess(){
+  /* ===================== 일별 날씨 예보 (일정 탭에서 고른 날짜 기준) =====================
+     "지금 날씨"가 아니라, 위 날짜 탭에서 고른 09/04·09/05 같은 그 날짜 자체의 예보예요.
+     하노이 현지 날짜 기준으로 맞춰요(한국이랑 시차 있는 것 감안). SHEETS_URL이 없거나 그 날짜가
+     예보 범위(보통 최대 10일) 밖이면, 조용히 기존 시간대 추정 방식으로 대체돼요. */
+  var DAY_FORECAST_CACHE = null; // {fetchedAt, byDate:{ "YYYY-MM-DD": {...} }}
+  function fetchDayForecast(){
+    if(!SHEETS_URL) return;
+    if(DAY_FORECAST_CACHE && (Date.now()-DAY_FORECAST_CACHE.fetchedAt) < 3*3600000) return; // 3시간 캐시
+    var coord = CITY_COORDS.hanoi;
+    fetch(SHEETS_URL+"?action=forecastdays&lat="+coord.lat+"&lng="+coord.lng)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d || !d.ok || !d.days) return;
+        var byDate = {};
+        d.days.forEach(function(day){ if(day.date) byDate[day.date] = day; });
+        DAY_FORECAST_CACHE = { fetchedAt: Date.now(), byDate: byDate };
+        renderItemStatuses();
+      }).catch(function(){});
+  }
+  function dayForecastFor(dateStr){
+    return (DAY_FORECAST_CACHE && DAY_FORECAST_CACHE.byDate[dateStr]) || null;
+  }
+  function getWeatherGuess(dateStr){
+    var fc = dateStr ? dayForecastFor(dateStr) : null;
+    if(fc && fc.precipPct!=null) return fc.precipPct>=40 ? "B" : "A";
     var h = hanoiHour();
     return (h>=14 && h<19) ? "B" : "A";
   }
@@ -2449,12 +2473,17 @@
   }
   function renderItemStatuses(){
     renderPlanMiniMap();
-    var active = getWeatherGuess();
+    fetchDayForecast();
+    var fc = dayForecastFor(planSelectedDate);
+    var active = getWeatherGuess(planSelectedDate);
     var other = active==="A" ? "B" : "A";
     var head = document.getElementById("planLineActive");
+    var basis = fc
+      ? (fc.icon||"")+" "+(fc.cond||"")+(fc.minTemp!=null&&fc.maxTemp!=null?" "+fc.minTemp+"~"+fc.maxTemp+"°":"")+(fc.precipPct!=null?" · 강수 "+fc.precipPct+"%":"")+" · 그 날짜 실시간 예보"
+      : "자동 추정 (시간대 기준)";
     head.innerHTML = '<div class="plan-line-head">'
       + (active==="A" ? "☀️ 맑은 날 추천" : "🌧️ 비 오는 날 추천")
-      + " · 자동 추정"
+      + " · " + basis
       + '</div>' + planLineHtml(active);
     var otherSummary = document.getElementById("planLineOtherSummary");
     if(otherSummary) otherSummary.textContent = (other==="A" ? "☀️ 맑은 날 플랜" : "🌧️ 비 오는 날 플랜")+"도 보기";
