@@ -115,6 +115,8 @@
     color:var(--ink);
     font-family:var(--font-body);
     -webkit-font-smoothing:antialiased;
+    display:flex;
+    justify-content:center;
   }
   h1,h2,h3{ font-family:var(--font-display); font-weight:800; margin:0; text-wrap:balance; letter-spacing:-.01em; }
   p{ margin:0; }
@@ -126,12 +128,12 @@
     *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
   }
 
-  /* 원래 모바일 화면 기준으로 만든 앱이라, 데스크톱 크롬에서 파일을 그냥 열어도(설치 여부와
-     상관없이) 좌우를 항상 화면 폭 전체로 꽉 채워요. 내용이 화면보다 길면 억지로 안에 가둬서
-     따로 스크롤시키지 않고, 그냥 페이지 자체가 아래로 자연스럽게 스크롤돼요(헤더/하단 탭바만
-     화면에 붙어있어요) — 콘텐츠가 짧을 때 탭바 위로 빈 공간이 크게 남던 문제도 이걸로 없어져요. */
+  /* 모바일 폭 기준의 "앱처럼 좁은" 화면을 유지하면서(넓은 데스크톱 크롬에서도 폭은 그대로 좁게),
+     내용이 화면보다 길면 억지로 안에 가둬서 따로 스크롤시키지 않고 페이지 자체가 아래로
+     자연스럽게 스크롤돼요(헤더/하단 탭바만 화면에 붙어있어요). */
   .app{
     width:100%;
+    max-width:480px;
     min-height:100dvh;
     background:var(--bg);
     position:relative;
@@ -139,9 +141,9 @@
     flex-direction:column;
   }
 
+  .app-bg{ position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
   .app-bg svg{ position:absolute; bottom:0; left:0; width:100%; height:60%; display:block; }
   .app > *:not(.app-bg){ position:relative; z-index:1; }
-  .app-bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
 
   /* ---------- header ---------- */
   .topbar{
@@ -226,10 +228,10 @@
   /* ---------- main scroll area ---------- */
   main{
     flex:1 1 auto;
-    padding:16px 16px 90px;
+    padding:12px 12px 78px;
     display:flex;
     flex-direction:column;
-    gap:16px;
+    gap:12px;
   }
   .view{ display:none; flex-direction:column; gap:16px; animation:fade .25s ease; }
   .view.active{ display:flex; }
@@ -240,10 +242,10 @@
     -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
     border:1px solid var(--glass-border);
     border-radius:20px;
-    padding:16px;
+    padding:13px;
     display:flex;
     flex-direction:column;
-    gap:12px;
+    gap:10px;
     box-shadow:var(--shadow);
   }
   .card.tight{ padding:14px 16px; gap:8px; }
