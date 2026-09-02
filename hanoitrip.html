@@ -806,11 +806,12 @@
         <div class="cl-panel" id="clGift" style="display:none">
           <div id="giftRecipientSummary" class="gift-recipient-summary"></div>
           <div id="giftList"></div>
-          <p class="auto-suggest" style="margin:8px 0 4px;">받는 사람 관리 — 한 번 등록해두면 아래에서 골라 쓸 수 있고, 이름을 고치면 이미 등록한 선물에도 그대로 반영돼요.</p>
+          <p class="auto-suggest" style="margin:8px 0 4px;">받는 사람 관리 — 한 번 등록해두면 아래에서 골라 쓸 수 있고, 이름을 고치면 이미 등록한 선물에도 그대로 반영돼요. 칩 색깔로 누가 등록했는지 구분돼요.</p>
           <div style="display:flex; gap:8px;">
             <input type="text" id="giftRecipientNew" style="flex:1;" placeholder="받는 사람 이름 (예: 부모님)">
             <button class="btn ghost" id="giftRecipientAddBtn" type="button">+ 추가</button>
           </div>
+          <button class="btn ghost" id="giftMineToggle" data-mode="all" type="button" style="margin-top:6px; font-size:12.5px; padding:6px 10px; width:auto;">👀 전체 보기</button>
           <div id="giftRecipientList" class="gift-recipient-list"></div>
           <div class="exp-form" style="grid-template-columns:1fr 1fr; margin-top:8px;">
             <select id="giftFor"><option value="">누구를 위해 (미정)</option></select>
@@ -3093,10 +3094,24 @@
   function renderBucketPanel(){ renderCheckList("clBucket", "bucket", state.bucket, "text"); refreshClHint(); }
   function renderGiftPanel(){
     renderGiftRecipients();
-    renderCheckList("giftList", "gift", state.cart, "name");
+    var myRecipientIds = (state.giftRecipients||[]).filter(function(r){ return r.ownerId===myId; }).map(function(r){ return r.id; });
+    var cartShown = !giftShowMineOnly ? state.cart : state.cart.filter(function(it){
+      return !it.forId || myRecipientIds.indexOf(it.forId)!==-1;
+    });
+    renderCheckList("giftList", "gift", cartShown, "name");
     refreshClHint();
   }
   CL_RENDER.prep = renderPrepPanel; CL_RENDER.bucket = renderBucketPanel; CL_RENDER.gift = renderGiftPanel;
+
+  // 사람마다 배경/글자색을 다르게 줘서, 셋이 각자 등록한 "받는 사람"이 이름만 봐선 헷갈릴 때도
+  // 누가 등록했는지 색으로 바로 구분돼요.
+  var GIFT_OWNER_STYLE = {
+    t1: {bg:"#E4574C", fg:"#FFFFFF"}, // 가현: 빨간 배경, 하얀 글씨
+    t2: {bg:"#F0973F", fg:"#1B5E3A"}, // 나인: 주황 배경, 초록 글씨
+    t3: {bg:"#FFFFFF", fg:"#1A1A1A"}  // 률희: 하양 배경, 검정 글씨
+  };
+  function giftOwnerStyle(ownerId){ return GIFT_OWNER_STYLE[ownerId] || {bg:"var(--surface)", fg:"var(--ink)"}; }
+  var giftShowMineOnly = false;
 
   // 받는 사람을 매번 타이핑하면 "부모님"/"부모님께"처럼 살짝씩 다르게 적혀서 같은 사람인데
   // 따로 집계되곤 했어요. 그래서 사람을 한 번만 등록해두고 그 다음부턴 골라 쓰게 하고,
@@ -3106,14 +3121,17 @@
     var listEl = document.getElementById("giftRecipientList");
     var summaryEl = document.getElementById("giftRecipientSummary");
     if(!sel || !listEl || !summaryEl) return;
-    var recipients = state.giftRecipients || [];
+    var recipients = (state.giftRecipients || []).filter(function(r){ return !giftShowMineOnly || r.ownerId===myId; });
     var curVal = sel.value;
     sel.innerHTML = '<option value="">누구를 위해 (미정)</option>'
       + recipients.map(function(r){ return '<option value="'+r.id+'">'+r.name+'</option>'; }).join("");
     if(recipients.some(function(r){ return r.id===curVal; })) sel.value = curVal;
 
     listEl.innerHTML = recipients.map(function(r){
-      return '<span class="rchip"><span data-editname="'+r.id+'">'+r.name+'</span><button type="button" data-rmrecipient="'+r.id+'">✕</button></span>';
+      var st = giftOwnerStyle(r.ownerId);
+      return '<span class="rchip" style="background:'+st.bg+'; color:'+st.fg+'; border-color:'+st.bg+';">'
+        +'<span data-editname="'+r.id+'">'+r.name+'</span>'
+        +'<button type="button" data-rmrecipient="'+r.id+'" style="background:rgba(0,0,0,0.12); color:'+st.fg+';">✕</button></span>';
     }).join("");
     listEl.querySelectorAll("[data-editname]").forEach(function(el){
       el.addEventListener("click", function(){
@@ -3134,7 +3152,11 @@
       });
     });
 
-    var allItems = state.cart.concat(getLocalItems("gift"));
+    var allItems = (state.cart.concat(getLocalItems("gift"))).filter(function(it){
+      if(!giftShowMineOnly) return true;
+      if(!it.forId) return true; // 받는 사람 미정인 항목은 필터와 상관없이 보여줘요
+      return recipients.some(function(r){ return r.id===it.forId; });
+    });
     var counts = {}; var order = [];
     allItems.forEach(function(it){
       var name = giftRecipientName(it) || "미정";
@@ -3149,8 +3171,14 @@
     var input = document.getElementById("giftRecipientNew");
     var v = input.value.trim();
     if(!v) return;
-    Store.collection("giftRecipients").add({name: v});
+    Store.collection("giftRecipients").add({name: v, ownerId: myId});
     input.value = "";
+  });
+  document.getElementById("giftMineToggle").addEventListener("click", function(){
+    giftShowMineOnly = !giftShowMineOnly;
+    this.setAttribute("data-mode", giftShowMineOnly ? "mine" : "all");
+    this.textContent = giftShowMineOnly ? "🙋 내 것만 보는 중" : "👀 전체 보기";
+    renderGiftRecipients();
   });
 
   wireVisToggle(document.getElementById("giftVisToggle"));
