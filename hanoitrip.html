@@ -133,11 +133,15 @@
      자연스럽게 스크롤돼요(헤더/하단 탭바만 화면에 붙어있어요). */
   .app{
     width:100%;
-    max-width:480px;
     background:var(--bg);
     position:relative;
     display:flex;
     flex-direction:column;
+  }
+  /* 실제 휴대폰(태블릿 포함, 900px 미만 폭)에서는 항상 화면을 좌우로 완전히 꽉 채우고, 진짜
+     넓은 데스크톱 창에서 열었을 때만 앱처럼 좁은 폭(480px)으로 가운데 정렬돼요. */
+  @media (min-width:900px){
+    .app, nav.tabbar, .drawer-overlay, .sheet-overlay, .entry-gate{ max-width:480px; }
   }
 
   /* ---------- header ---------- */
@@ -634,7 +638,6 @@
     bottom:0;
     transform:translateX(-50%);
     width:100%;
-    max-width:480px;
     z-index:5;
   }
   nav.tabbar button{
@@ -650,7 +653,7 @@
      덮게 해요. */
   .sheet-overlay{
     position:fixed; left:50%; top:0; bottom:0; transform:translateX(-50%);
-    width:100%; max-width:480px;
+    width:100%;
     background:rgba(20,10,18,0.45); display:none; align-items:flex-end; z-index:20;
   }
   .sheet-overlay.show{ display:flex; }
@@ -669,7 +672,7 @@
 
   .entry-gate{
     position:fixed; left:50%; top:0; bottom:0; transform:translateX(-50%);
-    width:100%; max-width:480px;
+    width:100%;
     z-index:60; background:var(--glass-strong);
     -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
     display:none; flex-direction:column; align-items:center; justify-content:center; gap:8px;
@@ -692,7 +695,7 @@
 
   .drawer-overlay{
     position:fixed; left:50%; top:0; bottom:0; transform:translateX(-50%);
-    width:100%; max-width:480px;
+    width:100%;
     z-index:55; background:rgba(10,16,22,0.35);
     display:none;
   }
@@ -1029,7 +1032,7 @@
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5.2c0 4.6-3 8.4-7 9.8-4-1.4-7-5.2-7-9.8V6l7-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
         <span>세이프티</span>
       </button>
-      <button class="drawer-item" id="drawerChangeUser" style="margin-top:auto; border-top:1px solid var(--line); border-radius:12px 12px 0 0; padding-top:16px;">
+      <button class="drawer-item" id="drawerChangeUser" style="margin-top:10px; border-top:1px solid var(--line); padding-top:16px;">
         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.5" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 20c1.4-4 4.4-6 7.5-6s6.1 2 7.5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>사용자 변경</span>
       </button>
