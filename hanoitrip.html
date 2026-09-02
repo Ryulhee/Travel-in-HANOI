@@ -24,12 +24,6 @@
     var blob = new Blob([JSON.stringify(json)], {type:'application/manifest+json'});
     link.setAttribute('href', URL.createObjectURL(blob));
   }catch(e){ console.warn('manifest fixup failed', e); }
-  // 구형 iOS Safari는 CSS의 (display-mode: standalone) 미디어 쿼리를 못 믿을 때가 있어서,
-  // navigator.standalone(iOS 전용 플래그)으로도 한 번 더 확인해서 클래스를 달아둬요.
-  try{
-    var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
-    if(isStandalone) document.documentElement.classList.add('pwa-standalone');
-  }catch(e){}
 })();
 </script>
 <meta name="theme-color" content="#1E3350">
@@ -134,6 +128,9 @@
     *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
   }
 
+  /* 원래 모바일 화면 기준으로 만든 앱이라, 데스크톱 크롬에서 파일을 그냥 열어도(설치 여부와
+     상관없이) 항상 화면 전체 높이를 꽉 채운 모바일 폭 화면으로 보여줘요. 예전엔 넓은 화면에서
+     작은 카드처럼(둥근 모서리+여백) 줄어들게 해뒀는데, 그게 "작은 화면으로 열린다"는 문제였어요. */
   .app{
     width:100%;
     max-width:480px;
@@ -142,22 +139,8 @@
     position:relative;
     display:flex;
     flex-direction:column;
-    box-shadow:var(--shadow);
     overflow:hidden;
   }
-  @media (min-width:481px){
-    body{ padding:24px 12px; }
-    .app{ height:min(920px, calc(100dvh - 48px)); border-radius:28px; }
-  }
-  /* 홈 화면에 설치해서 진짜 "앱"으로 실행 중일 땐(브라우저 탭이 아니라), 화면 폭이 넓게
-     잡히는 기기라도 항상 화면 전체를 꽉 채워야 해요 — 위 카드 스타일(둥근 모서리+여백)은
-     브라우저에서 볼 때의 데스크톱 미리보기용이지, 설치된 앱에서는 나오면 안 돼요. */
-  @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui){
-    body{ padding:0 !important; }
-    .app{ max-width:none !important; width:100vw !important; height:100dvh !important; border-radius:0 !important; box-shadow:none !important; }
-  }
-  html.pwa-standalone body{ padding:0 !important; }
-  html.pwa-standalone .app{ max-width:none !important; width:100vw !important; height:100dvh !important; border-radius:0 !important; box-shadow:none !important; }
 
   .app-bg{ position:absolute; inset:0; z-index:0; overflow:hidden; }
   .app-bg svg{ position:absolute; bottom:0; left:0; width:100%; height:60%; display:block; }
@@ -2224,6 +2207,40 @@
     });
     return all.slice(0, n||5);
   }
+  // 시간대별 예보 칸: 예전엔 고정된 시각표(오후 9시·자정·오전3시...)를 그대로 보여줘서,
+  // 실제 지금 시각이 몇 시든 상관없이 항상 "똑같은 정보"처럼 보였어요. 오늘 날짜를 보고 있을 땐
+  // 진짜 "지금부터 1시간 뒤, 2시간 뒤...5시간 뒤"로 라벨을 실제 현재 시각 기준으로 다시 계산하고,
+  // 오늘이 아닌 다음날 이후는 시간별로 정확히 알 수 없으니 오전/정오/15시/18시, 이렇게 그 날의
+  // 대표 시간대 4곳만 보여줘요(각각 그 날 최저~최고 기온 사이를 보간한 값).
+  function hourLabelKR(hh){
+    hh = ((hh%24)+24)%24;
+    if(hh===0) return "자정";
+    if(hh<12) return "오전 "+hh+"시";
+    if(hh===12) return "정오";
+    return "오후 "+(hh-12)+"시";
+  }
+  function buildTodayHourlySlots(baseTemp, icon, precipPct, cityKey){
+    var now = cityKey==="hanoi" ? hanoiHour() : new Date().getHours();
+    var slots = [];
+    for(var i=1;i<=5;i++){
+      var hh = now+i;
+      var delta = Math.round(Math.sin((hh/24)*Math.PI*2)*2);
+      slots.push([hourLabelKR(hh), icon, baseTemp+delta, precipPct]);
+    }
+    return slots;
+  }
+  function buildDayRepresentativeSlots(fc, staticW){
+    var min = (fc && fc.minTemp!=null) ? fc.minTemp : staticW.temp-3;
+    var max = (fc && fc.maxTemp!=null) ? fc.maxTemp : staticW.temp+3;
+    var icon = (fc && fc.icon) || staticW.icon;
+    var precip = (fc && fc.precipPct!=null) ? fc.precipPct : (staticW.hourly[0] ? staticW.hourly[0][3] : 10);
+    return [
+      ["오전", icon, Math.round(min+(max-min)*0.3), precip],
+      ["정오", icon, Math.round(min+(max-min)*0.7), precip],
+      ["15시", icon, max, precip],
+      ["18시", icon, Math.round(min+(max-min)*0.5), precip]
+    ];
+  }
   function renderQpPanel(which){
     var panel = document.getElementById("qpPanel");
     document.querySelectorAll("#quickgrid .quick-btn").forEach(function(b){
@@ -2253,6 +2270,19 @@
       var basisLabel = fc
         ? dlabel+(fc.minTemp!=null&&fc.maxTemp!=null?" "+fc.minTemp+"~"+fc.maxTemp+"°":"")+" 예보"+(isLive?" · 지금 "+live.temp+"°":"")
         : dlabel+" 추정치"+(isToday?"":" · 예보 범위 밖");
+      var hourlySlots, hourlyCaption;
+      if(isToday){
+        if(isLive && live.hourly && live.hourly.length){
+          hourlySlots = live.hourly;
+          hourlyCaption = "지금부터 5시간 (실시간)";
+        } else {
+          hourlySlots = buildTodayHourlySlots(w.temp, w.icon, (fc&&fc.precipPct!=null?fc.precipPct:(staticW.hourly[0]?staticW.hourly[0][3]:10)), cityChoice);
+          hourlyCaption = "지금부터 5시간 (추정)";
+        }
+      } else {
+        hourlySlots = buildDayRepresentativeSlots(fc, staticW);
+        hourlyCaption = dlabel+"의 대표 시간대 (추정)";
+      }
       panel.innerHTML =
         '<div class="pilltabs" id="qpCityTabs" style="margin-bottom:10px;">'+
           '<button data-city="seoul" class="'+(cityChoice==="seoul"?"on":"")+'">🇰🇷 서울</button>'+
@@ -2265,7 +2295,8 @@
             '<span class="wx-badge">'+basisLabel+'</span>'+
           '</div>'+
           '<div class="wx-banner'+(guess==="B" && !isLive?" rain":"")+'">'+w.advisory+'</div>'+
-          '<div class="wx-hourly">'+w.hourly.map(function(h){
+          '<div class="wx-hourly-caption" style="font-size:10.5px; color:var(--ink-faint); margin:8px 0 4px;">'+hourlyCaption+'</div>'+
+          '<div class="wx-hourly">'+hourlySlots.map(function(h){
             return '<div class="wx-hour"><span class="t">'+h[0]+'</span><span class="i">'+h[1]+'</span><span class="v">'+h[2]+'°</span><span class="r">💧'+h[3]+'%</span></div>';
           }).join("")+'</div>'+
           '<a class="wx-more" href="'+weatherLinkUrl()+'" target="_blank" rel="noopener">실제 날씨 더보기 ↗</a>'+
