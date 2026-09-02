@@ -134,16 +134,13 @@
   .app{
     width:100%;
     max-width:480px;
-    min-height:100dvh;
     background:var(--bg);
     position:relative;
     display:flex;
     flex-direction:column;
   }
 
-  .app-bg{ position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-  .app-bg svg{ position:absolute; bottom:0; left:0; width:100%; height:60%; display:block; }
-  .app > *:not(.app-bg){ position:relative; z-index:1; }
+  .app > *:not(.topbar):not(nav.tabbar){ position:relative; z-index:1; }
 
   /* ---------- header ---------- */
   .topbar{
@@ -225,9 +222,8 @@
   .upcoming-banner.show{ display:flex; }
   .upcoming-banner svg{ flex:0 0 auto; }
 
-  /* ---------- main scroll area ---------- */
+  /* ---------- main content ---------- */
   main{
-    flex:1 1 auto;
     padding:12px 12px 78px;
     display:flex;
     flex-direction:column;
@@ -625,16 +621,22 @@
   }
   .sos-btn:active{ transform:scale(.96); }
 
-  /* ---------- bottom nav ---------- */
+  /* ---------- bottom nav ----------
+     sticky는 화면보다 콘텐츠가 짧을 땐 화면 맨 아래로 안 붙고 콘텐츠 바로 밑에 머물러요(그래서
+     그걸 억지로 밀어내리려고 main을 늘렸다가 그 늘어난 부분이 빈 공간으로 보이는 문제가
+     있었어요). fixed로 바꿔서 콘텐츠 길이와 상관없이 항상 화면 진짜 맨 아래에 붙게 해요. */
   nav.tabbar{
-    flex:0 0 auto;
     display:flex;
     border-top:1px solid var(--glass-border);
     background:var(--glass-strong);
     -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
     padding:6px 4px calc(6px + env(safe-area-inset-bottom));
-    position:sticky;
+    position:fixed;
+    left:50%;
     bottom:0;
+    transform:translateX(-50%);
+    width:100%;
+    max-width:480px;
     z-index:5;
   }
   nav.tabbar button{
@@ -707,7 +709,6 @@
 </style>
 
 <div class="app" id="app" data-theme="">
-  <div class="app-bg" id="appBg"></div>
   <header class="topbar">
     <button class="menu-btn" id="menuBtn" aria-label="메뉴">
       <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -2363,49 +2364,6 @@
     });
   });
 
-  /* ===================== APP BACKGROUND (weather-reactive forest) ===================== */
-  function treeRow(baseY, color, seed){
-    var d = "M0 "+baseY+" ";
-    var x = -10;
-    var i = 0;
-    while(x < 400){
-      var w = 34 + ((seed+i*7)%5)*6;
-      var h = 22 + ((seed+i*11)%4)*9;
-      d += "L"+x+" "+baseY+" L"+(x+w/2)+" "+(baseY-h)+" L"+(x+w)+" "+baseY+" ";
-      x += w*0.72;
-      i++;
-    }
-    d += "L400 "+baseY+" L400 200 L0 200 Z";
-    return '<path d="'+d+'" fill="'+color+'"/>';
-  }
-  function renderAppBg(){
-    var plan = getWeatherGuess();
-    var extra, skyGrad;
-    if(plan === "A"){
-      extra = '<circle cx="290" cy="46" r="30" fill="#FFE3A0" opacity="0.55"/><circle cx="290" cy="46" r="16" fill="#FFD873"/>';
-      skyGrad = ['#7FB8D9','#CDE7C8'];
-    } else if(plan === "B"){
-      extra = '<g stroke="#B9C7D6" stroke-width="2" stroke-linecap="round" opacity="0.5">'+
-        '<line x1="60" y1="10" x2="48" y2="34"/><line x1="140" y1="4" x2="128" y2="30"/><line x1="230" y1="12" x2="218" y2="38"/><line x1="320" y1="6" x2="308" y2="32"/>'+
-        '</g>';
-      var skyGrad = ['#6B7C8C','#A9B7BE'];
-    } else {
-      extra = '';
-      var skyGrad = ['#3F6E86','#7FA98F'];
-    }
-    document.getElementById("appBg").innerHTML =
-      '<svg viewBox="0 0 400 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'+
-        '<defs><linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1">'+
-          '<stop offset="0%" stop-color="'+skyGrad[0]+'"/><stop offset="100%" stop-color="'+skyGrad[1]+'"/>'+
-        '</linearGradient></defs>'+
-        '<rect width="400" height="130" fill="url(#skyg)"/>'+
-        extra+
-        treeRow(150, "#1E3A2C", 2)+
-        treeRow(168, "#274F3B", 5)+
-        treeRow(185, "#2F6B4B", 9)+
-      '</svg>';
-  }
-
   /* ===================== HERO SCENE (Hoàn Kiếm Lake, weather-reactive) ===================== */
   function hanoiHour(){
     try{
@@ -2466,7 +2424,6 @@
   /* ===================== HOME: date strip + countdown ===================== */
   function renderStatic(){
     renderCrest();
-    renderAppBg();
     renderDateStrip();
     renderDateHighlight();
     renderHomeCountdown();
@@ -2577,7 +2534,6 @@
   }
   function renderPlanToggle(){
     if(qpOpen==="weather") renderQpPanel("weather");
-    renderAppBg();
     checkUpcoming();
     renderItemStatuses();
   }
