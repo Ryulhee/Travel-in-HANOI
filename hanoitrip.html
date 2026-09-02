@@ -140,8 +140,6 @@
     flex-direction:column;
   }
 
-  .app > *:not(.topbar):not(nav.tabbar){ position:relative; z-index:1; }
-
   /* ---------- header ---------- */
   .topbar{
     -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
@@ -646,8 +644,14 @@
   nav.tabbar button.active{ color:var(--accent); }
   nav.tabbar svg{ width:21px; height:21px; }
 
+  /* position:absolute였을 땐, 페이지가 화면 높이보다 길어지면(자연 스크롤 도입 이후) 이
+     오버레이가 지금 보이는 화면이 아니라 "앱 전체 콘텐츠 높이"만큼 늘어나서 스크롤한 위치에
+     따라 엉뚱한 곳에 걸쳐 보이는 문제가 있었어요. fixed로 바꿔서 항상 지금 보이는 화면 전체를
+     덮게 해요. */
   .sheet-overlay{
-    position:absolute; inset:0; background:rgba(20,10,18,0.45); display:none; align-items:flex-end; z-index:20;
+    position:fixed; left:50%; top:0; bottom:0; transform:translateX(-50%);
+    width:100%; max-width:480px;
+    background:rgba(20,10,18,0.45); display:none; align-items:flex-end; z-index:20;
   }
   .sheet-overlay.show{ display:flex; }
   .sheet{
@@ -664,7 +668,9 @@
   ::-webkit-scrollbar{ width:0; height:0; }
 
   .entry-gate{
-    position:absolute; inset:0; z-index:60; background:var(--glass-strong);
+    position:fixed; left:50%; top:0; bottom:0; transform:translateX(-50%);
+    width:100%; max-width:480px;
+    z-index:60; background:var(--glass-strong);
     -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
     display:none; flex-direction:column; align-items:center; justify-content:center; gap:8px;
     padding:32px 24px; text-align:center;
@@ -685,7 +691,9 @@
   .entry-heart{ font-size:30px; }
 
   .drawer-overlay{
-    position:absolute; inset:0; z-index:55; background:rgba(10,16,22,0.35);
+    position:fixed; left:50%; top:0; bottom:0; transform:translateX(-50%);
+    width:100%; max-width:480px;
+    z-index:55; background:rgba(10,16,22,0.35);
     display:none;
   }
   .drawer-overlay.show{ display:block; }
