@@ -573,6 +573,20 @@
   .cart-item.done .n{ text-decoration:line-through; color:var(--ink-faint); }
   .cart-item .rm{ background:none; border:none; color:var(--ink-faint); cursor:pointer; }
   .addrow{ display:flex; gap:8px; }
+  .gift-recipient-summary{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+  .gift-recipient-summary .chip{
+    font-size:12.5px; font-weight:700; padding:5px 10px; border-radius:999px;
+    background:var(--surface-alt); color:var(--ink-soft);
+  }
+  .gift-recipient-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .gift-recipient-list .rchip{
+    display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600;
+    padding:5px 6px 5px 10px; border-radius:999px; background:var(--surface); border:1px solid var(--line);
+  }
+  .gift-recipient-list .rchip button{
+    background:var(--surface-alt); border:none; border-radius:999px; width:18px; height:18px;
+    font-size:11px; line-height:1; cursor:pointer; color:var(--ink-faint);
+  }
   .addrow input{ flex:1; border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:9px 10px; font-size:15px; }
   .addrow button{ flex:0 0 auto; }
 
@@ -790,9 +804,16 @@
         <div class="cl-panel" id="clPrep"></div>
         <div class="cl-panel" id="clBucket" style="display:none"></div>
         <div class="cl-panel" id="clGift" style="display:none">
+          <div id="giftRecipientSummary" class="gift-recipient-summary"></div>
           <div id="giftList"></div>
+          <p class="auto-suggest" style="margin:8px 0 4px;">받는 사람 관리 — 한 번 등록해두면 아래에서 골라 쓸 수 있고, 이름을 고치면 이미 등록한 선물에도 그대로 반영돼요.</p>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="giftRecipientNew" style="flex:1;" placeholder="받는 사람 이름 (예: 부모님)">
+            <button class="btn ghost" id="giftRecipientAddBtn" type="button">+ 추가</button>
+          </div>
+          <div id="giftRecipientList" class="gift-recipient-list"></div>
           <div class="exp-form" style="grid-template-columns:1fr 1fr; margin-top:8px;">
-            <input type="text" id="giftFor" placeholder="누구를 위해 (예: 부모님)">
+            <select id="giftFor"><option value="">누구를 위해 (미정)</option></select>
             <input type="text" id="giftItem" placeholder="무엇을 (예: 자수 파우치)">
           </div>
           <div style="display:flex; gap:8px; margin-top:8px;">
@@ -2122,6 +2143,7 @@
     cart: [],
     prep: [],
     bucket: [],
+    giftRecipients: [],
     spots: [],
     myWallet: [],
     emergency: {active:false}
@@ -2208,6 +2230,10 @@
     });
     Store.collection("shopping").onSnapshot(function(list){
       state.cart = list;
+      renderGiftPanel();
+    });
+    Store.collection("giftRecipients").onSnapshot(function(list){
+      state.giftRecipients = list;
       renderGiftPanel();
     });
     Store.collection("prep").onSnapshot(function(list){
@@ -3003,6 +3029,17 @@
     });
   }
 
+  // forId(받는 사람 id)가 있으면 지금 등록된 이름으로 실시간 표시해요 — 나중에 받는 사람
+  // 이름을 고치면, 이미 적어둔 기념품에도 그 수정이 그대로 반영돼요. forId가 가리키는 사람이
+  // 지워졌으면 예전에 저장해둔 이름(for)을 "(삭제됨)"과 같이 보여줘요.
+  function giftRecipientName(item){
+    if(item.forId){
+      var r = (state.giftRecipients||[]).find(function(x){ return x.id===item.forId; });
+      if(r) return r.name;
+      return item.for ? item.for+" (삭제됨)" : "(삭제됨)";
+    }
+    return item.for || "";
+  }
   function renderCheckList(containerId, list, sharedItems, textField){
     var el = document.getElementById(containerId);
     var localItems = getLocalItems(list).map(function(x){ return Object.assign({}, x, {_local:true}); });
@@ -3012,7 +3049,8 @@
     items.forEach(function(c){
       var row = document.createElement("div");
       row.className = "cart-item" + (c.checked?" done":"");
-      var label = (c._local ? '<span class="for-tag">🔒 나만</span>' : '')+(c.for ? ('<span class="for-tag">'+c.for+'님을 위해</span>') : '')+c[textField];
+      var forName = giftRecipientName(c);
+      var label = (c._local ? '<span class="for-tag">🔒 나만</span>' : '')+(forName ? ('<span class="for-tag">'+forName+'님을 위해</span>') : '')+c[textField];
       row.innerHTML =
         '<div class="checkbox'+(c.checked?" checked":"")+'" data-id="'+c.id+'" data-local="'+(c._local?"1":"0")+'">'+(c.checked?'<svg width="13" height="13" viewBox="0 0 24 24"><path d="M4 12l6 6L20 6" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</div>'+
         '<div class="n">'+label+'</div>'+
@@ -3053,17 +3091,78 @@
   }
   function renderPrepPanel(){ renderCheckList("clPrep", "prep", state.prep, "text"); refreshClHint(); }
   function renderBucketPanel(){ renderCheckList("clBucket", "bucket", state.bucket, "text"); refreshClHint(); }
-  function renderGiftPanel(){ renderCheckList("giftList", "gift", state.cart, "name"); refreshClHint(); }
+  function renderGiftPanel(){
+    renderGiftRecipients();
+    renderCheckList("giftList", "gift", state.cart, "name");
+    refreshClHint();
+  }
   CL_RENDER.prep = renderPrepPanel; CL_RENDER.bucket = renderBucketPanel; CL_RENDER.gift = renderGiftPanel;
+
+  // 받는 사람을 매번 타이핑하면 "부모님"/"부모님께"처럼 살짝씩 다르게 적혀서 같은 사람인데
+  // 따로 집계되곤 했어요. 그래서 사람을 한 번만 등록해두고 그 다음부턴 골라 쓰게 하고,
+  // 지금까지 각자에게 몇 개씩 챙겼는지도 위에 요약해서 보여줘요.
+  function renderGiftRecipients(){
+    var sel = document.getElementById("giftFor");
+    var listEl = document.getElementById("giftRecipientList");
+    var summaryEl = document.getElementById("giftRecipientSummary");
+    if(!sel || !listEl || !summaryEl) return;
+    var recipients = state.giftRecipients || [];
+    var curVal = sel.value;
+    sel.innerHTML = '<option value="">누구를 위해 (미정)</option>'
+      + recipients.map(function(r){ return '<option value="'+r.id+'">'+r.name+'</option>'; }).join("");
+    if(recipients.some(function(r){ return r.id===curVal; })) sel.value = curVal;
+
+    listEl.innerHTML = recipients.map(function(r){
+      return '<span class="rchip"><span data-editname="'+r.id+'">'+r.name+'</span><button type="button" data-rmrecipient="'+r.id+'">✕</button></span>';
+    }).join("");
+    listEl.querySelectorAll("[data-editname]").forEach(function(el){
+      el.addEventListener("click", function(){
+        var id = el.getAttribute("data-editname");
+        var r = recipients.find(function(x){ return x.id===id; });
+        var next = prompt("이름 수정", r ? r.name : "");
+        if(next==null) return;
+        next = next.trim();
+        if(!next) return;
+        Store.doc("giftRecipients/"+id).update({name: next});
+      });
+    });
+    listEl.querySelectorAll("[data-rmrecipient]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-rmrecipient");
+        if(!confirm("이 사람을 목록에서 지울까요? 이미 등록해둔 기념품은 이름만 남고 그대로 있어요.")) return;
+        Store.collection("giftRecipients").remove(id);
+      });
+    });
+
+    var allItems = state.cart.concat(getLocalItems("gift"));
+    var counts = {}; var order = [];
+    allItems.forEach(function(it){
+      var name = giftRecipientName(it) || "미정";
+      if(!(name in counts)){ counts[name]=0; order.push(name); }
+      counts[name]++;
+    });
+    summaryEl.innerHTML = order.length===0 ? "" : order.map(function(name){
+      return '<span class="chip">'+name+' '+counts[name]+'개</span>';
+    }).join("");
+  }
+  document.getElementById("giftRecipientAddBtn").addEventListener("click", function(){
+    var input = document.getElementById("giftRecipientNew");
+    var v = input.value.trim();
+    if(!v) return;
+    Store.collection("giftRecipients").add({name: v});
+    input.value = "";
+  });
 
   wireVisToggle(document.getElementById("giftVisToggle"));
   document.getElementById("giftAddBtn").addEventListener("click", function(){
-    var forInput = document.getElementById("giftFor");
+    var forSel = document.getElementById("giftFor");
     var itemInput = document.getElementById("giftItem");
     var v = itemInput.value.trim();
     if(!v) return;
-    addClItem("gift", {name:v, for:forInput.value.trim(), checked:false}, document.getElementById("giftVisToggle").getAttribute("data-mode"));
-    forInput.value = ""; itemInput.value = "";
+    var forId = forSel.value || null;
+    var forName = forId ? (forSel.options[forSel.selectedIndex].textContent) : "";
+    addClItem("gift", {name:v, forId:forId, for:forName, checked:false}, document.getElementById("giftVisToggle").getAttribute("data-mode"));
+    itemInput.value = "";
   });
 
   ["prep","bucket"].forEach(function(name){
