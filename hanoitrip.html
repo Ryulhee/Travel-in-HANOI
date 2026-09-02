@@ -3053,7 +3053,7 @@
   }
   function renderPrepPanel(){ renderCheckList("clPrep", "prep", state.prep, "text"); refreshClHint(); }
   function renderBucketPanel(){ renderCheckList("clBucket", "bucket", state.bucket, "text"); refreshClHint(); }
-  function renderGiftPanel(){ renderCheckList("giftList", "shopping", state.cart, "name"); refreshClHint(); }
+  function renderGiftPanel(){ renderCheckList("giftList", "gift", state.cart, "name"); refreshClHint(); }
   CL_RENDER.prep = renderPrepPanel; CL_RENDER.bucket = renderBucketPanel; CL_RENDER.gift = renderGiftPanel;
 
   wireVisToggle(document.getElementById("giftVisToggle"));
