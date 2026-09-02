@@ -820,6 +820,11 @@
         </div>
         <div id="planMiniMap" class="gmap-box"></div>
         <div class="gmap-empty-hint" id="planMiniMapHint" style="display:none;">담은 스팟이 없어요 · 아래 목록에서 체크해보세요</div>
+        <div class="pilltabs" id="busRouteToggle" style="margin-top:8px;">
+          <button data-bus="weekend" type="button">🟢 주말 시티투어 버스</button>
+          <button data-bus="weekday" type="button">🟠 주중 시티투어 버스</button>
+        </div>
+        <p class="auto-suggest" id="busRouteHint" style="margin-top:4px; display:none;"></p>
       </div>
 
       <div class="card" id="planSpotMainCard">
@@ -853,6 +858,11 @@
         </div>
         <div id="radarMap" class="gmap-box"></div>
         <div class="gmap-empty-hint" id="radarMapHint" style="display:none;">담은 스팟이 없어요 · 아래 목록에서 체크해보세요</div>
+        <div class="pilltabs" id="busRouteToggle2" style="margin-top:8px;">
+          <button data-bus="weekend" type="button">🟢 주말 시티투어 버스</button>
+          <button data-bus="weekday" type="button">🟠 주중 시티투어 버스</button>
+        </div>
+        <p class="auto-suggest" id="busRouteHint2" style="margin-top:4px; display:none;"></p>
         <div id="spotList" style="display:flex; flex-direction:column; gap:8px; margin-top:4px;"></div>
         <div class="spot-add">
           <div class="emoji-pick" id="spotEmojiPick">
@@ -1157,6 +1167,32 @@
     {name:"하노이 주말 야시장 입구", emoji:"🍜", note:"야시장 · 금·토만 운영 · ★4.3 (161)", lat:21.0325776, lng:105.8513037, rating:4.3, home:true, q:"Hanoi Weekend Night Market"},
     {name:"Somerset Grand Hanoi", emoji:"📍", note:"숙소 · 5성급 호텔 · ★4.4 (2,407)", lat:21.0325, lng:105.8296, rating:4.4, home:false, q:"Somerset Grand Hanoi"}
   ];
+
+  /* ===================== 하노이 시티투어(홉온홉오프) 버스 노선 =====================
+     실제 운영 정보(여러 여행 정보 사이트 종합) 기준. 정류장 위치는 실제 GPS 실측이 아니라
+     지명 기준 대략 좌표라, 실제 정류장 표지판 위치와 몇십 m 정도 다를 수 있어요.
+     - 노선 자체(정류장 순서)는 주중/주말 동일하고, "하노이 우체국" 정류장만 주중에만 서요.
+     - 출발지: 주중엔 호안끼엠 호수(딘 띠엔 호앙 거리) 쪽, 주말엔 오페라하우스 쪽에서 시작.
+     - 운행 시간: 매일 09:15~17:15, 약 30분 간격(전체 순환 약 60~90분). 주중 저녁 19:30에
+       야간 특별 운행이 1회 추가로 있어요(정차 없이 순환). */
+  var CITY_TOUR_STOPS = [
+    {name:"오페라하우스", lat:21.0245, lng:105.8573, weekday:true, weekend:true},
+    {name:"두꺼비 정원(프록가든)", lat:21.0257, lng:105.8535, weekday:true, weekend:true},
+    {name:"하노이 우체국", lat:21.0294, lng:105.8522, weekday:true, weekend:false},
+    {name:"군사역사박물관", lat:21.0323, lng:105.8398, weekday:true, weekend:true},
+    {name:"탕롱 황성", lat:21.0333, lng:105.8407, weekday:true, weekend:true},
+    {name:"꽌탄 사원", lat:21.0429, lng:105.8354, weekday:true, weekend:true},
+    {name:"쩐꾸옥 사원", lat:21.0490, lng:105.8390, weekday:true, weekend:true},
+    {name:"호치민 묘소", lat:21.0369, lng:105.8341, weekday:true, weekend:true},
+    {name:"문묘(국자감)", lat:21.0284, lng:105.8355, weekday:true, weekend:true},
+    {name:"호아로 수용소", lat:21.0327, lng:105.8460, weekday:true, weekend:true},
+    {name:"성요셉 대성당", lat:21.0294, lng:105.8492, weekday:true, weekend:true},
+    {name:"여성박물관", lat:21.0264, lng:105.8514, weekday:true, weekend:true}
+  ];
+  var CITY_TOUR_INFO = "매일 09:15~17:15 · 약 30분 간격 · 주중 저녁 19:30 야간 1회 추가 운행 (주중은 호안끼엠 호수, 주말은 오페라하우스에서 출발)";
+  var showBusRoute = { weekday:false, weekend:false };
+  function busRouteStops(kind){ return CITY_TOUR_STOPS.filter(function(s){ return s[kind]; }); }
+
   var myLocation = null;
   var refPointId = "stay";
   var liveGpsCoord = null; // navigator.geolocation으로 받은 실시간 위치 (없으면 null)
@@ -1407,10 +1443,14 @@
           zoom: 15,
           mapTypeControl: false, streetViewControl: false, fullscreenControl: false
         });
-        inst = GMAP_INSTANCES[containerId] = { map: map, markers: [], refMarker: null, infoWindow: new google.maps.InfoWindow() };
+        inst = GMAP_INSTANCES[containerId] = { map: map, markers: [], busMarkers: [], busLines: [], refMarker: null, infoWindow: new google.maps.InfoWindow() };
       }
       inst.markers.forEach(function(m){ m.setMap(null); });
       inst.markers = [];
+      (inst.busMarkers||[]).forEach(function(m){ m.setMap(null); });
+      inst.busMarkers = [];
+      (inst.busLines||[]).forEach(function(l){ l.setMap(null); });
+      inst.busLines = [];
       if(inst.refMarker) inst.refMarker.setMap(null);
       inst.refMarker = new google.maps.Marker({
         position: {lat: myLocation.lat, lng: myLocation.lng},
@@ -1441,7 +1481,35 @@
         inst.markers.push(marker);
         bounds.extend({lat: s.lat, lng: s.lng});
       });
-      if(spots.length>0){ inst.map.fitBounds(bounds, 40); }
+      var anyBusShown = false;
+      [{kind:"weekend", color:"#2F6B4B", show:showBusRoute.weekend}, {kind:"weekday", color:"#F0973F", show:showBusRoute.weekday}].forEach(function(r){
+        if(!r.show) return;
+        anyBusShown = true;
+        var stops = busRouteStops(r.kind);
+        var path = stops.map(function(s){ return {lat:s.lat, lng:s.lng}; });
+        path.push(path[0]); // 순환 노선이라 마지막에 출발점으로 다시 이어줘요
+        var line = new google.maps.Polyline({
+          path: path, map: inst.map, strokeColor: r.color, strokeWeight: 3, strokeOpacity: 0.85
+        });
+        inst.busLines.push(line);
+        stops.forEach(function(s){
+          var busMarker = new google.maps.Marker({
+            position: {lat:s.lat, lng:s.lng}, map: inst.map,
+            icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: r.color, fillOpacity: 1, strokeColor:"#fff", strokeWeight: 2 },
+            title: s.name+" ("+(r.kind==="weekend"?"주말":"주중")+" 시티투어 버스)"
+          });
+          var showBusTip = function(){
+            inst.infoWindow.setContent('<div style="font-size:14px; font-weight:700;">🚌 '+s.name+'</div><div style="font-size:12px; color:'+r.color+'; font-weight:700;">'+(r.kind==="weekend"?"주말":"주중")+' 시티투어 버스 정류장</div>');
+            inst.infoWindow.open(inst.map, busMarker);
+          };
+          busMarker.addListener("click", showBusTip);
+          busMarker.addListener("mouseover", showBusTip);
+          busMarker.addListener("mouseout", function(){ inst.infoWindow.close(); });
+          inst.busMarkers.push(busMarker);
+          bounds.extend({lat:s.lat, lng:s.lng});
+        });
+      });
+      if(spots.length>0 || anyBusShown){ inst.map.fitBounds(bounds, 40); }
       else { inst.map.setCenter({lat: myLocation.lat, lng: myLocation.lng}); inst.map.setZoom(15); }
     });
   }
@@ -1519,6 +1587,29 @@
       });
     });
   }
+  // 주말/주중 시티투어 버스 노선 보기 토글이에요. 지도가 2군데(일정 탭, 이동 탭)에 있어서
+  // 버튼도 각각 있지만, 상태(showBusRoute)는 하나만 공유해서 항상 같이 켜지고 꺼져요.
+  function refreshBusRouteToggleUI(){
+    document.querySelectorAll('[id^="busRouteToggle"] [data-bus]').forEach(function(btn){
+      btn.classList.toggle("on", showBusRoute[btn.getAttribute("data-bus")]);
+    });
+    var anyOn = showBusRoute.weekend || showBusRoute.weekday;
+    ["busRouteHint","busRouteHint2"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el) return;
+      el.style.display = anyOn ? "" : "none";
+      el.textContent = CITY_TOUR_INFO;
+    });
+  }
+  document.querySelectorAll('[id^="busRouteToggle"] [data-bus]').forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var kind = btn.getAttribute("data-bus");
+      showBusRoute[kind] = !showBusRoute[kind];
+      refreshBusRouteToggleUI();
+      renderPlanMiniMap();
+      renderRadarMap();
+    });
+  });
   var spotFilterCat = "all", spotEmojiChoice = "🍜";
   document.querySelectorAll("#spotFilterTabs [data-cat]").forEach(function(btn){
     btn.addEventListener("click", function(){
